@@ -1,0 +1,42 @@
+{
+   "action": {
+      "default_icon": {
+         "128": "icon128.png",
+         "16": "icon128.png",
+         "48": "icon128.png"
+      },
+      "default_popup": "popup.html",
+      "default_title": "Gemini Chat Folder"
+   },
+   "background": {
+      "service_worker": "background.js",
+      "type": "module"
+   },
+   "content_scripts": [
+      {
+         "css": [
+            "styles.css"
+         ],
+         "js": [
+            "content.js"
+         ],
+         "matches": [
+            "https://gemini.google.com/*"
+         ]
+      }
+   ],
+   "description": "Organize Gemini chats into folders with drag-to-reorder, wide mode, and keyboard shortcuts.",
+   "icons": {
+      "128": "icon128.png",
+      "16": "icon128.png",
+      "48": "icon128.png"
+   },
+   "manifest_version": 3,
+   "name": "Gemini Chat Folder",
+   "permissions": [
+      "storage",
+      "identity"
+   ],
+   "update_url": "https://clients2.google.com/service/update2/crx",
+   "version": "3.5"
+}
