@@ -34,7 +34,77 @@ chrome.storage.onChanged.addListener(async (changes, namespace) => {
             }
         }
     }
+}
 });
+
+// LISTEN FOR MESSAGES FROM CONTENT SCRIPT (Mainly Auth)
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'handleSession') {
+        handleSessionSetup(request.session).then(res => sendResponse(res));
+        return true; // async response
+    }
+
+    if (request.action === 'updatePassword') {
+        updateUserPassword(request.token, request.password).then(res => sendResponse(res));
+        return true; // async response
+    }
+});
+
+async function handleSessionSetup(sessionPartial) {
+    try {
+        const token = sessionPartial.access_token;
+        supabase.setSession(token);
+
+        // Fetch User Details to complete the session object
+        // We need to fetch user from Supabase Auth API
+        // Typically GET /auth/v1/user
+        // We don't have a direct method in our client for this yet, let's add or use raw fetch
+
+        // Actually, our client.getUser(token) exists? Let's check config.
+        // Yes, supabase-client.js has getUser(token).
+
+        // We need to instantiate a client here? 'supabase' is already instantiated at top of file.
+        // Wait, 'supabase' in this file is an instance.
+        // Does it have getUser?
+        // Let's modify supabase-client.js if needed or use existing.
+        // The file `lib/supabase-client.js` has `getUser(token)`.
+
+        // But `supabase.getUser` is not exposed in the simple instance we created?
+        // Ah, `supabase` is `new SupabaseClient(...)`. So yes it has methods.
+        // WAIT: The `supabase-client.js` I read earlier creates the class.
+
+        const userData = await supabase.getUser(token);
+        // userData might vary structure depending on API.
+        // Usually it returns User object directly or { user: ... }
+
+        // If successful
+        const fullSession = {
+            access_token: token,
+            refresh_token: sessionPartial.refresh_token,
+            expires_in: sessionPartial.expires_in,
+            token_type: sessionPartial.token_type,
+            user: userData // Save the full user object
+        };
+
+        await chrome.storage.local.set({ 'supabase_session': fullSession });
+        return { success: true };
+
+    } catch (e) {
+        console.error('Session Setup Failed:', e);
+        return { success: false, error: e.message };
+    }
+}
+
+async function updateUserPassword(token, newPassword) {
+    try {
+        supabase.setSession(token);
+        const result = await supabase.updateUser({ password: newPassword });
+        return { success: true, data: result };
+    } catch (e) {
+        console.error('Password Update Failed:', e);
+        return { success: false, error: e.message };
+    }
+}
 
 async function syncToCloud(folders) {
     if (isSyncing) return;
