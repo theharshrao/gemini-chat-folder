@@ -51,7 +51,11 @@ This extension is open-source and can be installed directly from GitHub.
 
 ## 📸 Screenshots
 
-*(Add screenshots here - e.g. Dragging a chat, The Folder list, The Login Popup)*
+<p align="center">
+  <img src="screenshots/login_screen.png" alt="Login Screen" width="45%">
+  &nbsp; &nbsp;
+  <img src="screenshots/logged_in_screen.png" alt="Logged In Screen" width="45%">
+</p>
 
 ---
 
