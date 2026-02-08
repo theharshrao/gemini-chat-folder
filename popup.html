@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      width: 320px;
+      padding: 16px;
+      font-family: 'Google Sans', 'Segoe UI', sans-serif;
+      background-color: #f8f9fa;
+      color: #3c4043;
+    }
+
+    /* ... existing styles ... */
+    h2 {
+      font-size: 16px;
+      margin-top: 0;
+      color: #1a73e8;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 8px;
+      letter-spacing: 0.5px;
+    }
+
+    .section {
+      margin-top: 12px;
+    }
+
+    button {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 8px;
+      border: 1px solid #dadce0;
+      border-radius: 8px;
+      background-color: white;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    button:hover {
+      background-color: #f1f3f4;
+      border-color: #1a73e8;
+    }
+
+    .primary {
+      background-color: #1a73e8;
+      color: white;
+      border: none;
+    }
+
+    .primary:hover {
+      background-color: #1765cc;
+    }
+
+    /* Auth Views */
+    .hidden {
+      display: none !important;
+    }
+
+    .auth-container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    input[type="email"],
+    input[type="password"] {
+      padding: 10px;
+      border: 1px solid #dadce0;
+      border-radius: 6px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .google-btn {
+      background-color: white;
+      color: #3c4043;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font-weight: 500;
+    }
+
+    .user-info {
+      background: #e6f4ea;
+      padding: 8px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      font-size: 12px;
+      text-align: center;
+      color: #137333;
+    }
+
+    .footer {
+      text-align: center;
+      font-size: 13px;
+      color: #5f6368;
+      margin-top: 16px;
+      border-top: 1px solid #dadce0;
+      padding: 12px 0;
+    }
+
+    .footer a {
+      color: #fff;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      text-decoration: none;
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: 6px;
+      transition: all 0.3s ease;
+      display: inline-block;
+    }
+
+    .footer a:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    #status {
+      font-size: 11px;
+      text-align: center;
+      margin-top: 8px;
+      height: 14px;
+      color: #1a73e8;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+  <h2>Gemini Chat Folder</h2>
+
+  <!-- AUTH SCREEN -->
+  <div id="auth-view" class="section">
+    <div class="auth-container">
+      <input type="email" id="email" placeholder="Enter your email">
+      <input type="password" id="password" placeholder="Password">
+      <button id="login-btn" class="primary">Sign In</button>
+      <button id="signup-btn">Sign Up</button>
+      <div style="text-align: center; font-size: 11px; color: #666;">OR</div>
+      <button id="google-btn" class="google-btn">
+        <svg width="18" height="18" viewBox="0 0 18 18">
+          <path
+            d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"
+            fill="#4285F4" />
+          <path
+            d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.716H.957v2.332A8.997 8.997 0 0 0 9 18z"
+            fill="#34A853" />
+          <path
+            d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"
+            fill="#FBBC05" />
+          <path
+            d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.157 6.656 3.58 9 3.58z"
+            fill="#EA4335" />
+        </svg>
+        Continue with Google
+      </button>
+      <button id="guest-btn" class="secondary" style="margin-top: 8px;">Skip Login (Local Mode)</button>
+    </div>
+  </div>
+
+  <!-- APP VIEW (Hidden by default) -->
+  <div id="app-view" class="section hidden">
+    <div id="user-display" class="user-info"></div>
+
+    <p>Backup or restore your folders.</p>
+    <button id="export-btn" class="primary">Download Backup</button>
+    <button id="import-btn">Restore from File</button>
+    <button id="logout-btn" style="margin-top: 10px; color: #d93025; border-color: #d93025;">Sign Out</button>
+
+    <input type="file" id="file-input" style="display:none" accept=".json">
+  </div>
+
+  <div class="footer">
+    Developed by <a href="https://harshrao.in" target="_blank">Harsh Rao</a>
+  </div>
+
+  <div id="status"></div>
+  <script type="module" src="popup.js"></script>
+</body>
+
+</html>
