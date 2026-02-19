@@ -134,6 +134,7 @@ async function handleGoogleLogin() {
 
   const authUrl = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${cleanRedirect}`;
 
+  console.log("Redirect URL (Add this to Supabase):", cleanRedirect);
   console.log("Launching Auth Flow:", authUrl);
   showStatus('Opening Google Login...', 'info');
 
