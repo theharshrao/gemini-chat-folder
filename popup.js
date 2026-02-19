@@ -127,12 +127,15 @@ async function handleGoogleLogin() {
   const authUrl = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectUrl)}`;
 
   console.log("------------------------------------------------");
-  console.log("DEBUG: Extension Redirect URL:", redirectUrl);
-  console.log("ACTION REQUIRED: Go to Supabase -> Auth -> URL Configuration");
-  console.log("Add this to Redirect URLs (exactly as shown, creating a Wildcard is best):");
-  console.log(`${redirectUrl}*`); 
+  console.log("Redirect URL:", redirectUrl);
   console.log("------------------------------------------------");
   
+  // Show redirect URL in UI for easy debugging
+  const infoDiv = document.getElementById('redirect-info');
+  infoDiv.style.display = 'block';
+  infoDiv.innerHTML = `<strong>REQUIRED:</strong> Add this to Supabase Redirect URLs:<br>
+  <code style="user-select: all;">${redirectUrl}*</code>`;
+
   showStatus('Opening Google Login...', 'info');
 
   chrome.identity.launchWebAuthFlow({
