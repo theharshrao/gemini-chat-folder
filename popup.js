@@ -8,6 +8,7 @@ const SUPABASE_KEY = CONFIG.SUPABASE_KEY;
 
 const supabase = new SupabaseClient(SUPABASE_URL, SUPABASE_KEY);
 const STORAGE_KEY = 'gemini_folders_data';
+let isSyncing = false; // Prevent loops
 
 // --- DOM ELEMENTS ---
 const authView = document.getElementById('auth-view');
@@ -20,6 +21,7 @@ const googleBtn = document.getElementById('google-btn');
 const logoutBtn = document.getElementById('logout-btn');
 const statusDiv = document.getElementById('status');
 const userDisplay = document.getElementById('user-display');
+const redirectInfo = document.getElementById('redirect-info'); // New element for debug
 
 // --- STATE ---
 let currentUser = null;
@@ -87,9 +89,7 @@ async function handleLogin() {
   showStatus('Logging in...', 'info');
   try {
     const response = await supabase.signIn(email, password);
-    // response is the session object directly
-
-    // Save session
+    
     const session = {
       access_token: response.access_token,
       refresh_token: response.refresh_token,
@@ -123,15 +123,16 @@ async function handleSignup() {
 }
 
 async function handleGoogleLogin() {
-  // For extension, the best way without firebase is usually to open the Supabase Auth URL
-  // and let the user copy the token, OR use chrome.identity.launchWebAuthFlow.
-  // We will try a simpler approach for v1: Redirect to Supabase login page.
-
   const redirectUrl = chrome.identity.getRedirectURL();
-  const authUrl = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${redirectUrl}`;
+  const authUrl = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectUrl)}`;
 
-  console.log("Redirect URL (Add this to Supabase):", redirectUrl);
-  console.log("Launching Auth Flow:", authUrl);
+  console.log("------------------------------------------------");
+  console.log("DEBUG: Extension Redirect URL:", redirectUrl);
+  console.log("ACTION REQUIRED: Go to Supabase -> Auth -> URL Configuration");
+  console.log("Add this to Redirect URLs (exactly as shown, creating a Wildcard is best):");
+  console.log(`${redirectUrl}*`); 
+  console.log("------------------------------------------------");
+  
   showStatus('Opening Google Login...', 'info');
 
   chrome.identity.launchWebAuthFlow({
@@ -140,26 +141,24 @@ async function handleGoogleLogin() {
   }, async (responseUrl) => {
     if (chrome.runtime.lastError || !responseUrl) {
       console.error(chrome.runtime.lastError);
-      showStatus('Google Login failed: ' + (chrome.runtime.lastError?.message || 'Unknown'), 'error');
+      // If the user closed the window or the redirect failed
+      showStatus('Login cancelled or failed. Check console for URL details.', 'error');
       return;
     }
 
-    // Parse token from URL fragment
-    // URL looks like: https://<id>.chromiumapp.org/#access_token=...&refresh_token=...
     const hash = new URL(responseUrl).hash.substring(1);
     const params = new URLSearchParams(hash);
     const accessToken = params.get('access_token');
-    const refreshToken = params.get('refresh_token'); // Supabase sends this too often
+    const refreshToken = params.get('refresh_token');
 
     if (accessToken) {
       supabase.setSession(accessToken);
 
       try {
-        // Fetch real user to get the ID
         const user = await supabase.getUser(accessToken);
         const session = {
           access_token: accessToken,
-          refresh_token: refreshToken, // Save refresh token
+          refresh_token: refreshToken,
           user: user
         };
         await chrome.storage.local.set({ 'supabase_session': session });
@@ -191,32 +190,22 @@ async function syncData() {
   showStatus('Syncing...', 'info');
 
   try {
-    // 1. Load Local
     const local = await chrome.storage.local.get(STORAGE_KEY);
     const localFolders = local[STORAGE_KEY]?.folders || [];
 
-    // 2. Load Cloud
     const cloudRes = await supabase.getFolders(currentUser.id);
-    // cloudRes is array of rows. We expect 0 or 1 row.
     let cloudFolders = [];
     if (cloudRes.length > 0) {
       cloudFolders = cloudRes[0].data.folders || [];
     }
 
-    // 3. Merge (Simple Strategy: Cloud wins if exists, else Local pushes)
-    // For a seamless experience, if Cloud is empty and Local has data -> Push Local
-    // If Cloud has data -> Pull Cloud (overwrite local) - *User should know this*
-
     if (cloudFolders.length > 0) {
-      // Pull from Cloud
       await chrome.storage.local.set({ [STORAGE_KEY]: { folders: cloudFolders } });
 
-      // Notify Sync to Tabs
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         if (tabs[0] && tabs[0].id) {
           chrome.tabs.sendMessage(tabs[0].id, { action: 'refreshFolders' }, (response) => {
             if (chrome.runtime.lastError) {
-              // Ignore error if content script not ready
               console.log("Tab not ready for refresh:", chrome.runtime.lastError.message);
             }
           });
@@ -224,7 +213,6 @@ async function syncData() {
       });
       showStatus('Synced from Cloud', 'success');
     } else if (localFolders.length > 0) {
-      // Push to Cloud
       await supabase.upsertFolders(currentUser.id, { folders: localFolders });
       showStatus('Synced to Cloud', 'success');
     } else {
@@ -258,6 +246,5 @@ function showStatus(msg, type = 'info') {
 }
 
 // --- EXISTING EXPORT/IMPORT ---
-// ... (Keep existing logic or import it)
 async function exportData() { /* ... existing export logic ... */ }
 async function importData(event) { /* ... existing import logic ... */ }
