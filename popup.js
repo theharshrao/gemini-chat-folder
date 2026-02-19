@@ -128,13 +128,9 @@ async function handleGoogleLogin() {
   // We will try a simpler approach for v1: Redirect to Supabase login page.
 
   const redirectUrl = chrome.identity.getRedirectURL();
+  const authUrl = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${redirectUrl}`;
 
-  // Clean URL just in case (sometimes it adds trailing slash)
-  const cleanRedirect = redirectUrl.endsWith('/') ? redirectUrl.slice(0, -1) : redirectUrl;
-
-  const authUrl = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${cleanRedirect}`;
-
-  console.log("Redirect URL (Add this to Supabase):", cleanRedirect);
+  console.log("Redirect URL (Add this to Supabase):", redirectUrl);
   console.log("Launching Auth Flow:", authUrl);
   showStatus('Opening Google Login...', 'info');
 
