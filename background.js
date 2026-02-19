@@ -40,21 +40,17 @@ async function syncToCloud(folders) {
     if (isSyncing) return;
 
     // Get current session from storage if not set
-    if (!supabase.token) {
-        const stored = await chrome.storage.local.get(['supabase_session']);
-        if (stored.supabase_session && stored.supabase_session.access_token) {
-            supabase.setSession(stored.supabase_session.access_token);
-        } else {
-            return; // No user logged in, cannot sync
-        }
+    const stored = await chrome.storage.local.get(['supabase_session']);
+    let session = stored.supabase_session;
+
+    if (session && session.access_token) {
+        supabase.setSession(session.access_token);
+    } else {
+        return; // No user logged in, cannot sync
     }
 
     // Get User ID
-    // Optimally we store user info or get it from token. 
-    // Our popup saves 'user' object in session. Let's get it.
-    const stored = await chrome.storage.local.get(['supabase_session']);
-    const user = stored.supabase_session?.user;
-
+    const user = session.user;
     if (!user || !user.id) return;
 
     try {
@@ -63,6 +59,32 @@ async function syncToCloud(folders) {
         await supabase.upsertFolders(user.id, { folders: folders });
         console.log('[Background] Sync Success');
     } catch (err) {
+        // Handle Token Expiry (401)
+        if (err.status === 401 && session.refresh_token) {
+            console.log('[Background] Token expired, attempting refresh...');
+            try {
+                const data = await supabase.refreshToken(session.refresh_token);
+                if (data.access_token) {
+                    console.log('[Background] Token refreshed successfully');
+                    
+                    // Update Storage with new session
+                    const newSession = {
+                        access_token: data.access_token,
+                        refresh_token: data.refresh_token || session.refresh_token,
+                        user: data.user || session.user
+                    };
+                    await chrome.storage.local.set({ 'supabase_session': newSession });
+                    
+                    // Retry Sync
+                    supabase.setSession(data.access_token);
+                    await supabase.upsertFolders(user.id, { folders: folders });
+                    console.log('[Background] Retry Sync Success');
+                    return;
+                }
+            } catch (refreshErr) {
+                console.error('[Background] Token refresh failed:', refreshErr);
+            }
+        }
         console.error('[Background] Sync Failed', JSON.stringify(err, null, 2));
     } finally {
         isSyncing = false;

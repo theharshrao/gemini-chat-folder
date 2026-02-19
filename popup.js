@@ -33,9 +33,28 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function checkSession() {
   // Check chrome.storage for saved session/token
   const stored = await chrome.storage.local.get(['supabase_session']);
-  if (stored.supabase_session && stored.supabase_session.access_token) {
-    currentUser = stored.supabase_session.user;
-    supabase.setSession(stored.supabase_session.access_token);
+  let session = stored.supabase_session;
+
+  if (session && session.refresh_token) {
+    try {
+      const data = await supabase.refreshToken(session.refresh_token);
+      if (data && data.access_token) {
+        console.log("Refreshed session token automatically");
+        session = {
+          access_token: data.access_token,
+          refresh_token: data.refresh_token || session.refresh_token,
+          user: data.user || session.user
+        };
+        await chrome.storage.local.set({ 'supabase_session': session });
+      }
+    } catch (e) {
+      console.warn("Token refresh on startup failed", e);
+    }
+  }
+
+  if (session && session.access_token) {
+    currentUser = session.user;
+    supabase.setSession(session.access_token);
     showAppView();
     syncData(); // Trigger sync on load
   } else {
@@ -67,14 +86,18 @@ async function handleLogin() {
 
   showStatus('Logging in...', 'info');
   try {
-    const { data, error } = await supabase.signIn(email, password);
-    if (error) throw error;
+    const response = await supabase.signIn(email, password);
+    // response is the session object directly
 
     // Save session
-    const session = { access_token: data.access_token, user: data.user };
+    const session = {
+      access_token: response.access_token,
+      refresh_token: response.refresh_token,
+      user: response.user
+    };
     await chrome.storage.local.set({ 'supabase_session': session });
 
-    currentUser = data.user;
+    currentUser = response.user;
     showAppView();
     showStatus('Logged in successfully', 'success');
     syncData();
@@ -137,7 +160,11 @@ async function handleGoogleLogin() {
       try {
         // Fetch real user to get the ID
         const user = await supabase.getUser(accessToken);
-        const session = { access_token: accessToken, user: user };
+        const session = {
+          access_token: accessToken,
+          refresh_token: refreshToken, // Save refresh token
+          user: user
+        };
         await chrome.storage.local.set({ 'supabase_session': session });
 
         currentUser = user;
