@@ -13,17 +13,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'saveSession') {
         const session = request.session;
 
-        // Fetch real user object using the token to complete the session
         supabase.setSession(session.access_token);
-        supabase.getUser(session.access_token).then(user => {
-            session.user = user;
+        const payload = supabase.decodeJWT(session.access_token);
+        
+        if (payload && payload.sub) {
+            session.user = {
+                id: payload.sub,
+                email: payload.email,
+                user_metadata: payload.user_metadata || {}
+            };
             chrome.storage.local.set({ 'supabase_session': session }, () => {
                 sendResponse({ success: true });
             });
-        }).catch(err => {
-            console.error('[Background] Failed to fetch user details for intercepted token:', err);
-            sendResponse({ success: false, error: err });
-        });
+        } else {
+            console.error('[Background] Invalid token payload intercepted');
+            sendResponse({ success: false, error: 'Invalid token' });
+        }
 
         return true; // Keep message channel open for async response
     }
