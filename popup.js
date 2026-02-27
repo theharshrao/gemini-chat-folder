@@ -1,4 +1,3 @@
-
 import { SupabaseClient } from './lib/supabase-client.js';
 import { CONFIG } from './config.js';
 
@@ -33,9 +32,31 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function checkSession() {
   // Check chrome.storage for saved session/token
   const stored = await chrome.storage.local.get(['supabase_session']);
-  if (stored.supabase_session && stored.supabase_session.access_token) {
-    currentUser = stored.supabase_session.user;
-    supabase.setSession(stored.supabase_session.access_token);
+  let session = stored.supabase_session;
+
+  if (session && session.access_token && supabase.isTokenExpired(session.access_token) && session.refresh_token) {
+    try {
+      const data = await supabase.refreshToken(session.refresh_token);
+      if (data && data.access_token) {
+        console.log("Refreshed session token automatically");
+        session = {
+          access_token: data.access_token,
+          refresh_token: data.refresh_token || session.refresh_token,
+          user: data.user || session.user
+        };
+        await chrome.storage.local.set({ 'supabase_session': session });
+      }
+    } catch (e) {
+      console.warn("Token refresh on startup failed", e);
+      // Don't use the expired token if refresh fails
+      session = null;
+      await chrome.storage.local.remove('supabase_session');
+    }
+  }
+
+  if (session && session.access_token && !supabase.isTokenExpired(session.access_token)) {
+    currentUser = session.user;
+    supabase.setSession(session.access_token);
     showAppView();
     syncData(); // Trigger sync on load
   } else {
@@ -67,14 +88,18 @@ async function handleLogin() {
 
   showStatus('Logging in...', 'info');
   try {
-    const { data, error } = await supabase.signIn(email, password);
-    if (error) throw error;
+    const response = await supabase.signIn(email, password);
+    // response is the session object directly
 
     // Save session
-    const session = { access_token: data.access_token, user: data.user };
+    const session = {
+      access_token: response.access_token,
+      refresh_token: response.refresh_token,
+      user: response.user
+    };
     await chrome.storage.local.set({ 'supabase_session': session });
 
-    currentUser = data.user;
+    currentUser = response.user;
     showAppView();
     showStatus('Logged in successfully', 'success');
     syncData();
@@ -100,58 +125,14 @@ async function handleSignup() {
 }
 
 async function handleGoogleLogin() {
-  // For extension, the best way without firebase is usually to open the Supabase Auth URL
-  // and let the user copy the token, OR use chrome.identity.launchWebAuthFlow.
-  // We will try a simpler approach for v1: Redirect to Supabase login page.
+  const redirectUrl = 'https://gemini.google.com';
+  const authUrl = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectUrl)}`;
 
-  const redirectUrl = chrome.identity.getRedirectURL();
-
-  // Clean URL just in case (sometimes it adds trailing slash)
-  const cleanRedirect = redirectUrl.endsWith('/') ? redirectUrl.slice(0, -1) : redirectUrl;
-
-  const authUrl = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${cleanRedirect}`;
-
-  console.log("Launching Auth Flow:", authUrl);
   showStatus('Opening Google Login...', 'info');
+  chrome.tabs.create({ url: authUrl });
 
-  chrome.identity.launchWebAuthFlow({
-    url: authUrl,
-    interactive: true
-  }, async (responseUrl) => {
-    if (chrome.runtime.lastError || !responseUrl) {
-      console.error(chrome.runtime.lastError);
-      showStatus('Google Login failed: ' + (chrome.runtime.lastError?.message || 'Unknown'), 'error');
-      return;
-    }
-
-    // Parse token from URL fragment
-    // URL looks like: https://<id>.chromiumapp.org/#access_token=...&refresh_token=...
-    const hash = new URL(responseUrl).hash.substring(1);
-    const params = new URLSearchParams(hash);
-    const accessToken = params.get('access_token');
-    const refreshToken = params.get('refresh_token'); // Supabase sends this too often
-
-    if (accessToken) {
-      supabase.setSession(accessToken);
-
-      try {
-        // Fetch real user to get the ID
-        const user = await supabase.getUser(accessToken);
-        const session = { access_token: accessToken, user: user };
-        await chrome.storage.local.set({ 'supabase_session': session });
-
-        currentUser = user;
-        showAppView();
-        showStatus('Logged in with Google', 'success');
-        syncData();
-      } catch (err) {
-        showStatus('Failed to fetch user details', 'error');
-        console.error(err);
-      }
-    } else {
-      showStatus('No access token received', 'error');
-    }
-  });
+  // Close the popup so the user focuses on the new tab
+  window.close();
 }
 
 function handleLogout() {
@@ -209,7 +190,15 @@ async function syncData() {
 
   } catch (err) {
     console.error("Sync Error Details:", err);
-    showStatus('Sync failed: ' + (err.error?.message || err.message || 'Unknown'), 'error');
+    if (err.status === 401) {
+      chrome.storage.local.remove('supabase_session');
+      currentUser = null;
+      supabase.setSession(null);
+      showAuthView();
+      showStatus('Session expired. Please log in again.', 'error');
+    } else {
+      showStatus('Sync failed: ' + (err.error?.message || err.message || 'Unknown'), 'error');
+    }
   }
 }
 
